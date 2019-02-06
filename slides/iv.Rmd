@@ -1,0 +1,207 @@
+---
+title: "Instrumental variables"
+author: "Milan Pleus"
+date: "23 januari 2019"
+output: ioslides_presentation
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+library(ggplot2)
+library(tidyr)
+```
+
+## Introduction
+PhD thesis on classifying variables as **exogeneous** or **endogenous**.
+
+**Ignorability** is called **exogeneity** in econometrics.
+
+**Exogeneity** assumption is crucial when estimating a linear regression model by ordinary least squares (**OLS**).
+
+The method of instrumental variables (**IV**) provides a way to deal with violation of this assumption.
+
+
+## Exogeneity
+So what does **exogeneity** mean in a simple linear cross sectional regression model
+
+$$
+y_{i} = \beta x_{i} + u_{i}, \; u_{i}\sim IID(0,\sigma^{2}_{u})
+$$
+**Exogeneity** of $x_{i}$ means that any randomness in the data generating process (**DGP**) of $x_{i}$ is independent of $u_{i}$.
+
+This implies $E(u_{i}|x_{i})=0$ and our simple regression model can be estimated with ordinary least squares (**OLS**)
+
+
+## Endogeneity
+So why would $x_{i}$ not be **exogenous**?
+
+- Errors in variables
+- Omitted variables: $y_{i}=\alpha+\beta x_{i} + (w_{i}+\xi_{i})$ and $cov(x_{i},w_{i})\neq 0$
+- Simultaneity: $x_{i}\rightarrow y_{i}$ but also $y_{i} \rightarrow x_{i}$
+
+**OLS** is biased (finite $n$) and inconsistent ($n\rightarrow\infty$)
+
+
+
+## Solution: IV
+Suppose the availability of a new variable $z_{i}$ for which we are willing to assume that:
+
+1. It is **exogenous** with respect to $u_{i}$ in our simple regression model, hence $E(u_{i}|z_{i})=0$ 
+
+2. The instrument is correlated with $x_{i}$  
+
+Let us expand the simple regression model with a second equation for $x_{i}$
+
+$$
+\begin{eqnarray}
+y_{i} &=& \beta x_{i} + u_{i}\\ 
+x_{i} &=& \pi z_{i} + v_{i}
+\end{eqnarray}
+$$
+Notice that both the first as the second equation are linear with respect to the parameters
+
+## Intuition (2SLS)
+IV estimation can be seen as a **2SLS** estimator
+
+$x_{i}$ is splitted in two components, an exogenous part related to $z_{i}$ and an endogenous part.
+
+Only the exogenous part is used for estimation
+
+With OLS we find $\hat{\pi}$ and $\hat{\pi}z_{i}$ is used as a proxy for $x_{i}$ in the first equation
+
+The first equation is then also estimated with OLS to find $\hat{\beta}$ (incorrect standard errors!)
+
+Rather estimate using IV
+
+
+
+
+## Simulation time
+
+```{r iv}
+# Parameters of the simulation
+monte_carlo_iv <- function(n, cor_xz, cor_xu, cor_zu){
+  R <- 1000
+  
+  # Solving parameters
+  sigma_eps <- 1
+  sigma_xi <- sigma_eps
+  beta <- 1
+  iota <- t(as.vector(rep(1,n)))
+
+  lambda <- sqrt(2)*cor_zu
+  pi <- sqrt(cor_xz^2/(1-cor_xz^2))
+  rho <- sqrt(2)*cor_xu*sqrt(pi^2+1)-pi*lambda
+  
+  # Empty vector
+  iv <- vector()
+  ols <- vector()
+  for (r in 1:R){
+    zb <- rnorm(n,0,1)
+    xi <- rnorm(n,0,sigma_xi) 
+    eps <- rnorm(n,0,sigma_eps)
+    v <- rnorm(n,0,1)
+    u <- xi + eps
+    
+    
+    z <- lambda*xi + sqrt(1-lambda^2)*zb
+    x <- pi*z + rho*eps + sqrt(1-rho^2)*v
+    y <- as.vector(beta*x + u)
+    
+    X <- t(rbind(iota,x))
+    Z <- t(rbind(iota,z))
+    
+    b_ols <- solve(t(X)%*%X)%*%t(X)%*%y
+    b_iv <- solve(t(Z)%*%X)%*%t(Z)%*%y
+    
+    iv <- c(iv,b_iv[2])
+    ols <- c(ols,b_ols[2])
+    
+    #}
+  }
+  res_matrix <- as.data.frame(t(rbind(ols, iv)))
+  res_matrix <- gather(res_matrix)
+  
+  gg <- ggplot(res_matrix, aes(value, fill = key, colour = key)) +
+    geom_density(alpha = 0.2) +
+    theme_classic() +
+    xlab("estimates") +
+    coord_cartesian(xlim = c(0, 2)) +
+    geom_vline(xintercept=beta, linetype="dotted") +
+    theme(axis.line=element_blank(),
+          axis.text.y=element_blank(),
+          axis.title.y=element_blank(),
+          axis.ticks.y=element_blank()
+    )
+  
+  return(gg)
+}
+
+inputPanel(
+  #numericInput("n", label = "n:",
+  #             min = 20, value = 100, width = '50px'),
+  
+  sliderInput("cor_xu", label = "Degree of simultaneity x:",
+              min = -0.6, max = 0.6, value = 0, step = 0.1),
+  
+  sliderInput("cor_xz", label = "Strength of instruments:",
+              min = -0.6, max = 0.6, value = 0.4, step = 0.1),
+  
+    sliderInput("cor_zu", label = "Degree of simultaneity z:",
+              min = -0.6, max = 0.6, value = 0, step = 0.1)
+)
+
+renderPlot({
+  monte_carlo_iv(200, input$cor_xz, input$cor_xu, input$cor_zu)
+})
+```
+
+## OLS or IV?
+We only want to use IV when it is strictly necessary
+
+Luckily we can test this with the so called Durbin-Wu-Hausman test
+
+The idea is to examine the difference between the OLS estimate of $\beta$ and the IV estimate of $\beta$
+
+## More regressors, more instruments
+Our small regression model can easily be extended to have more regressors (both endogenous as exogenous)
+
+$$
+\begin{eqnarray}
+y &=& X\beta + u,\, u\sim(0,\sigma^{2}_{u}I)\\
+X &=& Z\Pi + V
+\end{eqnarray}
+$$
+where $X$ consists of multiple exogenous and endogenous regressors
+
+Exogenous regressors are instrumented by themselves (added to $Z$)
+
+We need at least more instruments than that there are endogenous regressors in the model (each one needs relevant instruments)
+
+
+## Exercise
+
+
+## Special case: LATE
+
+
+
+
+
+
+
+## Heteroskedasticity
+In case of heteroskedasticity we turn to **GMM** of which **OLS** and **IV** are a special case
+
+Heteroskedasticity means that $u_{i}\sim IID(0,\sigma^{2}_{i})$
+
+In order to be efficient we need to deal with this
+
+Very hard in a 
+
+
+
+
+
