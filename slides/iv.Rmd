@@ -8,22 +8,28 @@ runtime: shiny
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
-
 library(ggplot2)
 library(tidyr)
 ```
 
 ## Introduction
-PhD thesis on classifying variables as **exogeneous** or **endogenous**.
+Research on classifying variables as **exogeneous** or **endogenous**
 
-**Ignorability** is called **exogeneity** in econometrics.
+Introduction to **exogeneity**/**endogeneity**
 
-**Exogeneity** assumption is crucial when estimating a linear regression model by ordinary least squares (**OLS**).
+**Instrumental variable** estimation
 
-The method of instrumental variables (**IV**) provides a way to deal with violation of this assumption.
+Returns to schooling in R
 
+Assumptions, consequences and testing
+
+Testing our returns to schooling model
 
 ## Exogeneity
+**Exogeneity** is the same thing as **ignorability** and is crucial when using ordinary least squares (**OLS**) for causal inference
+
+**Exogeneity** of a variable $x$ in the model for $y$ means that $x$ is independent of $y$.
+
 So what does **exogeneity** mean in a simple linear cross sectional regression model
 
 $$
@@ -31,50 +37,82 @@ y_{i} = \beta x_{i} + u_{i}, \; u_{i}\sim IID(0,\sigma^{2}_{u})
 $$
 **Exogeneity** of $x_{i}$ means that any randomness in the data generating process (**DGP**) of $x_{i}$ is independent of $u_{i}$.
 
-This implies $E(u_{i}|x_{i})=0$ and our simple regression model can be estimated with ordinary least squares (**OLS**)
+Our simple regression model can be estimated with ordinary least squares (**OLS**)
 
 
 ## Endogeneity
 So why would $x_{i}$ not be **exogenous**?
 
-- Errors in variables
-- Omitted variables: $y_{i}=\alpha+\beta x_{i} + (w_{i}+\xi_{i})$ and $cov(x_{i},w_{i})\neq 0$
-- Simultaneity: $x_{i}\rightarrow y_{i}$ but also $y_{i} \rightarrow x_{i}$
+1. Errors in variables
+2. Omitted variables: $y_{i}=\alpha+\beta x_{i} + (w_{i}+\xi_{i})$ and $cov(x_{i},w_{i})\neq 0$
+3. Simultaneity: $x_{i}\rightarrow y_{i}$ but also $y_{i} \rightarrow x_{i}$
+
+Example: crime rates and size of police force (1/2/3?)
 
 **OLS** is biased (finite $n$) and inconsistent ($n\rightarrow\infty$)
 
-
-
 ## Solution: IV
+**OLS** exploits the **moment condition** $E(x_{i}u_{i})=0$.
+
 Suppose the availability of a new variable $z_{i}$ for which we are willing to assume that:
 
 1. It is **exogenous** with respect to $u_{i}$ in our simple regression model, hence $E(u_{i}|z_{i})=0$ 
 
 2. The instrument is correlated with $x_{i}$  
 
-Let us expand the simple regression model with a second equation for $x_{i}$
+
+
+## More regressors, more instruments
+
+Let us expand the simple regression model in several ways
 
 $$
 \begin{eqnarray}
-y_{i} &=& \beta x_{i} + u_{i}\\ 
-x_{i} &=& \pi z_{i} + v_{i}
+y &=& X\beta + u\\ 
+x &=& Z\Pi + V
 \end{eqnarray}
 $$
+There are $k$ regressors in $X$ and $l$ instruments in $Z$ and $l\ge k$
+
+Reduced form equation for $X$
+
 Notice that both the first as the second equation are linear with respect to the parameters
 
 ## Intuition (2SLS)
 IV estimation can be seen as a **2SLS** estimator
 
-$x_{i}$ is splitted in two components, an exogenous part related to $z_{i}$ and an endogenous part.
+$X$ is splitted in two components, an assumed to be exogenous part related to $Z$ and an endogenous part in $V$.
 
 Only the exogenous part is used for estimation
 
-With OLS we find $\hat{\pi}$ and $\hat{\pi}z_{i}$ is used as a proxy for $x_{i}$ in the first equation
+With OLS we find $\hat{\Pi}$ and $Z\hat{\Pi}$ is used as a proxy for $X$ in the equation of interest
 
 The first equation is then also estimated with OLS to find $\hat{\beta}$ (incorrect standard errors!)
 
-Rather estimate using IV
+Rather estimate using (G)IV
 
+
+## Notes
+
+OLS is a special case of IV
+
+To estimate with IV we need **at least** as many instruments as that we have endogenous regressors
+
+Exogenous regressors are instrumented by themselves
+
+Estimator is asymptotically ($n\rightarrow \infty$) normal under some regularity assumptions
+
+
+
+## IV in practice (exercise)
+
+Returns to schooling Griliches (1976)
+
+What are potential endogenous regressors?
+
+What are instrument candidates (do they influence $y$, are they correlated to $x$?)
+
+How much do the OLS and IV estimates differ? 
 
 
 
@@ -90,7 +128,6 @@ monte_carlo_iv <- function(n, cor_xz, cor_xu, cor_zu){
   sigma_xi <- sigma_eps
   beta <- 1
   iota <- t(as.vector(rep(1,n)))
-
   lambda <- sqrt(2)*cor_zu
   pi <- sqrt(cor_xz^2/(1-cor_xz^2))
   rho <- sqrt(2)*cor_xu*sqrt(pi^2+1)-pi*lambda
@@ -138,7 +175,6 @@ monte_carlo_iv <- function(n, cor_xz, cor_xu, cor_zu){
   
   return(gg)
 }
-
 inputPanel(
   #numericInput("n", label = "n:",
   #             min = 20, value = 100, width = '50px'),
@@ -152,39 +188,55 @@ inputPanel(
     sliderInput("cor_zu", label = "Degree of simultaneity z:",
               min = -0.6, max = 0.6, value = 0, step = 0.1)
 )
-
 renderPlot({
   monte_carlo_iv(200, input$cor_xz, input$cor_xu, input$cor_zu)
 })
 ```
 
 ## OLS or IV?
-We only want to use IV when it is strictly necessary
+When the regressors are exogenous OLS is much more **efficient** than IV
 
-Luckily we can test this with the so called Durbin-Wu-Hausman test
+Under some circumstances the **inconsistent** OLS estimator is more reliable than the **consistent** IV estimator
 
-The idea is to examine the difference between the OLS estimate of $\beta$ and the IV estimate of $\beta$
+Can we test the assumptions of OLS/IV? 
 
-## More regressors, more instruments
-Our small regression model can easily be extended to have more regressors (both endogenous as exogenous)
+Answer: partly
 
-$$
-\begin{eqnarray}
-y &=& X\beta + u,\, u\sim(0,\sigma^{2}_{u}I)\\
-X &=& Z\Pi + V
-\end{eqnarray}
-$$
-where $X$ consists of multiple exogenous and endogenous regressors
+With the **Hausman test** we can test the exogeneity of regressors, with the **Sargan test** we can test the exogeneity of the instruments. 
 
-Exogenous regressors are instrumented by themselves (added to $Z$)
+## Hausman test
+Test wether or not the regressors are exogenous
 
-We need at least more instruments than that there are endogenous regressors in the model (each one needs relevant instruments)
+Under the $H_{0}$ of exogeneity both estimators are consistent, under the $H_{1}$ just IV
+
+So we test $(\hat{\beta}_{IV}-\hat{\beta}_{OLS})$
+
+Corresponding test has asymptotic $\chi^{2}$ distribution with degrees of freedom equal to number of endogenous regressors
+
+Can also test subsets by comparing two IV estimators
+
+## Sargan test
+
+We can also test wether or not the instruments are exogenous (sort of)
+
+We have $l$ instruments to identify $k$ parameters ($k$ moment conditions are used for estimation)
+
+$l-k$ moment conditions can be tested
+
+## Notes on testing
+
+Distributions for tests are only derived asymptotically
+
+Nominal significance level does not need to correspond to actual significance level
+
+## Testing our returns to schooling model
 
 
-## Exercise
+## What else?
 
+LATE
 
-## Special case: LATE
+Using internal instruments
 
 
 
@@ -200,8 +252,3 @@ Heteroskedasticity means that $u_{i}\sim IID(0,\sigma^{2}_{i})$
 In order to be efficient we need to deal with this
 
 Very hard in a 
-
-
-
-
-
